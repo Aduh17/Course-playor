@@ -38,6 +38,10 @@ npm run dev
 
 Then open http://localhost:5173 and select your videos folder.
 
+### Windows quick start
+
+Double-click `start.bat`. On the first run it installs dependencies, then starts the app and opens it in your browser. Keep the window open while you use it; close it to stop the app.
+
 > If `npm install` skips devDependencies on your machine (e.g. `NODE_ENV=production` or `omit=dev` is configured globally), `--include=dev` is required — without it `tsc` and `vite` won't be installed.
 
 ### Scripts
