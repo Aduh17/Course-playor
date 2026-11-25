@@ -1,6 +1,7 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import type { Course, Lesson, ProgressMap, SectionNode } from '../types';
-import { countLessons, flattenLessons } from '../lib/utils';
+import { countLessons, flattenLessons, formatTime } from '../lib/utils';
+import { useDurationStore } from '../lib/durations';
 
 interface TreeLessonRowProps {
   lesson: Lesson;
@@ -11,6 +12,8 @@ interface TreeLessonRowProps {
 
 function TreeLessonRow({ lesson, active, progress, onSelect }: TreeLessonRowProps) {
   const ref = useRef<HTMLButtonElement>(null);
+  const durations = useDurationStore();
+  const duration = durations[lesson.id];
   const entry = progress[lesson.id];
   const completed = Boolean(entry?.completed);
   const watched = entry?.watchedRatio ?? 0;
@@ -34,6 +37,7 @@ function TreeLessonRow({ lesson, active, progress, onSelect }: TreeLessonRowProp
         style={partial ? ({ '--ring': `${Math.round(watched * 100)}%` } as CSSProperties) : undefined}
       />
       <span className="tree-lesson-name">{lesson.name}</span>
+      {duration ? <span className="tree-lesson-duration">{formatTime(duration)}</span> : null}
     </button>
   );
 }

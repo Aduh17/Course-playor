@@ -5,7 +5,7 @@ import CourseView from './components/CourseView';
 import { loadPersistedSource, makeFilesSource, pickFsaSource, supportsFsa } from './lib/fs';
 import type { LibrarySource } from './lib/fs';
 import { resetAllProgress } from './lib/progress';
-import { IconFullscreen, IconFullscreenExit } from './components/icons';
+import { IconFolder, IconFullscreen, IconFullscreenExit, IconReset } from './components/icons';
 import type { Course } from './types';
 
 type Phase = 'boot' | 'pick' | 'reconnect' | 'scanning' | 'empty' | 'ready';
@@ -161,10 +161,6 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div className="brand">
-          <span className="brand-dot" />
-          Course Player
-        </div>
         {source && (
           <span className="folder-chip" title={source.rootName}>
             {source.rootName}
@@ -176,15 +172,27 @@ export default function App() {
               Courses
             </button>
           )}
-          <button type="button" className="btn btn-ghost" onClick={handleChangeFolder}>
-            Change folder
-          </button>
-          <button type="button" className="btn btn-ghost danger" onClick={handleResetProgress}>
-            Reset progress
+          <button
+            type="button"
+            className="btn btn-ghost icon-btn"
+            onClick={handleChangeFolder}
+            title="Change folder"
+            aria-label="Change folder"
+          >
+            <IconFolder />
           </button>
           <button
             type="button"
-            className="btn btn-ghost fullscreen-btn"
+            className="btn btn-ghost danger icon-btn"
+            onClick={handleResetProgress}
+            title="Reset progress"
+            aria-label="Reset progress"
+          >
+            <IconReset />
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost icon-btn"
             onClick={togglePageFullscreen}
             title={pageFullscreen ? 'Exit full screen' : 'Full screen'}
             aria-label={pageFullscreen ? 'Exit full screen' : 'Enter full screen'}
@@ -208,9 +216,13 @@ export default function App() {
           source={source}
           onBack={() => setView({ name: 'library' })}
         />
-      ) : (
-        <Library courses={courses} onOpenCourse={(courseId) => setView({ name: 'course', courseId })} />
-      )}
+      ) : source ? (
+        <Library
+          courses={courses}
+          source={source}
+          onOpenCourse={(courseId) => setView({ name: 'course', courseId })}
+        />
+      ) : null}
     </div>
   );
 }

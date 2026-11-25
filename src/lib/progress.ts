@@ -9,7 +9,13 @@ function loadStore(): ProgressMap {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return {};
-    return JSON.parse(raw) as ProgressMap;
+    const parsed = JSON.parse(raw) as ProgressMap;
+    for (const entry of Object.values(parsed)) {
+      if (entry && !entry.completed && entry.watchedRatio >= COMPLETE_RATIO) {
+        entry.completed = true;
+      }
+    }
+    return parsed;
   } catch {
     return {};
   }
@@ -56,7 +62,7 @@ export function recordWatch(lessonId: string, position: number, duration: number
     duration,
     furthest,
     watchedRatio,
-    completed: prev?.completed ?? watchedRatio >= COMPLETE_RATIO,
+    completed: Boolean(prev?.completed) || watchedRatio >= COMPLETE_RATIO,
     lastWatchedAt: Date.now(),
   };
   persist();
@@ -87,14 +93,16 @@ export function resetAllProgress(): void {
 export function getCourseStats(
   progress: ProgressMap,
   course: Course,
-): { total: number; completed: number; ratio: number; lastLesson: Lesson | null } {
+): { total: number; completed: number; ratio: number; watchedRatio: number; lastLesson: Lesson | null } {
   const lessons = flattenLessons(course.root);
   let completed = 0;
+  let watched = 0;
   let lastLesson: Lesson | null = null;
   let lastAt = -Infinity;
   for (const lesson of lessons) {
     const entry = progress[lesson.id];
     if (entry?.completed) completed += 1;
+    if (entry) watched += Math.min(1, Math.max(0, entry.watchedRatio));
     if (entry && entry.lastWatchedAt > lastAt) {
       lastAt = entry.lastWatchedAt;
       lastLesson = lesson;
@@ -102,7 +110,8 @@ export function getCourseStats(
   }
   const total = lessons.length;
   const ratio = total === 0 ? 0 : completed / total;
-  return { total, completed, ratio, lastLesson };
+  const watchedRatio = total === 0 ? 0 : watched / total;
+  return { total, completed, ratio, watchedRatio, lastLesson };
 }
 
 export function getContinueLesson(progress: ProgressMap, course: Course): Lesson | null {

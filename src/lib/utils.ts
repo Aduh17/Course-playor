@@ -36,6 +36,16 @@ export function formatTime(seconds: number): string {
   return `${m}:${ss}`;
 }
 
+export function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '';
+  const totalMinutes = Math.round(seconds / 60);
+  if (totalMinutes < 1) return `${Math.round(seconds)}s`;
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  return `${m}m`;
+}
+
 export function joinPath(...parts: Array<string | undefined>): string {
   return parts.filter((part): part is string => typeof part === 'string' && part.length > 0).join('/');
 }

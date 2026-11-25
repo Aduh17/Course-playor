@@ -1,14 +1,28 @@
+import { useEffect, useMemo } from 'react';
 import type { Course } from '../types';
+import type { LibrarySource } from '../lib/fs';
 import { getContinueLesson, getCourseStats, useProgressStore } from '../lib/progress';
+import { ensureLessonDurations, useDurationStore } from '../lib/durations';
+import { flattenLessons, formatDuration } from '../lib/utils';
 import { IconPlay } from './icons';
 
 export interface LibraryProps {
   courses: Course[];
+  source: LibrarySource;
   onOpenCourse: (courseId: string) => void;
 }
 
-export default function Library({ courses, onOpenCourse }: LibraryProps) {
+export default function Library({ courses, source, onOpenCourse }: LibraryProps) {
   const progress = useProgressStore();
+  const durations = useDurationStore();
+  const lessonIds = useMemo(
+    () => courses.flatMap((course) => flattenLessons(course.root).map((lesson) => lesson.id)),
+    [courses],
+  );
+
+  useEffect(() => {
+    ensureLessonDurations(source, lessonIds);
+  }, [source, lessonIds]);
 
   return (
     <div className="library">
@@ -22,7 +36,12 @@ export default function Library({ courses, onOpenCourse }: LibraryProps) {
         {courses.map((course) => {
           const stats = getCourseStats(progress, course);
           const next = getContinueLesson(progress, course);
-          const pct = Math.round(stats.ratio * 100);
+          const watchedPct = Math.round(stats.watchedRatio * 100);
+          const totalDuration = flattenLessons(course.root).reduce(
+            (sum, lesson) => sum + (durations[lesson.id] ?? 0),
+            0,
+          );
+          const durationLabel = formatDuration(totalDuration);
           const label =
             stats.completed === 0 ? 'Start' : stats.completed >= stats.total ? 'Rewatch' : 'Continue';
           return (
@@ -38,10 +57,16 @@ export default function Library({ courses, onOpenCourse }: LibraryProps) {
               </div>
               <h3 className="course-card-title">{course.name}</h3>
               <div className="course-card-meta">
-                {stats.completed} of {stats.total} lessons{pct > 0 ? ` · ${pct}% complete` : ''}
+                {stats.completed} of {stats.total} lessons
+                {durationLabel ? ` · ${durationLabel}` : ''}
               </div>
-              <div className="progress-track">
-                <div className="progress-fill" style={{ width: `${pct}%` }} />
+              <div className="course-card-progress">
+                <div className="progress-track">
+                  <div className="progress-fill" style={{ width: `${watchedPct}%` }} />
+                </div>
+                <span className="course-card-pct">
+                  {watchedPct > 0 ? `${watchedPct}% watched` : 'Not started'}
+                </span>
               </div>
               <button
                 type="button"

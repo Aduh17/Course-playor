@@ -1,15 +1,46 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import type { Course } from '../types';
 import type { LibrarySource } from '../lib/fs';
 import { flattenLessons } from '../lib/utils';
+import { ensureLessonDurations } from '../lib/durations';
 import {
   getContinueLesson,
   markLessonCompleted,
   recordWatch,
   useProgressStore,
 } from '../lib/progress';
+import { IconSidebar } from './icons';
 import LessonTree from './LessonTree';
 import VideoPlayer from './VideoPlayer';
+
+const SIDEBAR_KEY = 'vcp:sidebar-width:v1';
+const SIDEBAR_COLLAPSED_KEY = 'vcp:sidebar-collapsed:v1';
+const MIN_SIDEBAR = 240;
+const MAX_SIDEBAR = 480;
+const DEFAULT_SIDEBAR = 320;
+
+function clampSidebar(width: number): number {
+  return Math.min(MAX_SIDEBAR, Math.max(MIN_SIDEBAR, width));
+}
+
+function loadSidebarWidth(): number {
+  try {
+    const raw = window.localStorage.getItem(SIDEBAR_KEY);
+    const value = raw ? Number(raw) : NaN;
+    if (Number.isFinite(value)) return clampSidebar(value);
+  } catch {
+    void 0;
+  }
+  return DEFAULT_SIDEBAR;
+}
+
+function loadSidebarCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 export interface CourseViewProps {
   course: Course;
@@ -30,13 +61,35 @@ export default function CourseView({ course, source, onBack }: CourseViewProps) 
   const [loadError, setLoadError] = useState<string | null>(null);
   const [finished, setFinished] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarCollapsed);
+  const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const advanceTimerRef = useRef<number | undefined>(undefined);
 
   const activeIndex = activeId ? flat.findIndex((lesson) => lesson.id === activeId) : -1;
   const activeLesson = activeIndex >= 0 ? flat[activeIndex] : undefined;
   const activeProgress = activeId ? progress[activeId] : undefined;
   const completedCount = flat.filter((lesson) => progress[lesson.id]?.completed).length;
-  const pct = flat.length > 0 ? (completedCount / flat.length) * 100 : 0;
+  const watchedPct =
+    flat.length > 0
+      ? Math.round(
+          (flat.reduce((sum, lesson) => sum + (progress[lesson.id]?.watchedRatio ?? 0), 0) /
+            flat.length) *
+            100,
+        )
+      : 0;
+
+  useEffect(() => {
+    ensureLessonDurations(source, flat.map((lesson) => lesson.id));
+  }, [source, flat]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? '1' : '0');
+    } catch {
+      void 0;
+    }
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (!activeId) return;
@@ -80,6 +133,37 @@ export default function CourseView({ course, source, onBack }: CourseViewProps) 
     };
   }, []);
 
+  const handleResizeStart = (event: PointerEvent<HTMLDivElement>) => {
+    const aside = event.currentTarget.parentElement;
+    const startWidth = aside?.getBoundingClientRect().width ?? sidebarWidth;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizeRef.current = { startX: event.clientX, startWidth };
+  };
+
+  const handleResizeMove = (event: PointerEvent<HTMLDivElement>) => {
+    const state = resizeRef.current;
+    if (!state) return;
+    setSidebarWidth(clampSidebar(state.startWidth + (event.clientX - state.startX)));
+  };
+
+  const handleResizeEnd = () => {
+    if (!resizeRef.current) return;
+    resizeRef.current = null;
+    try {
+      window.localStorage.setItem(SIDEBAR_KEY, String(sidebarWidth));
+    } catch {
+      void 0;
+    }
+  };
+
+  const toggleSidebar = () => {
+    if (window.matchMedia('(max-width: 880px)').matches) {
+      setSidebarOpen((open) => !open);
+      return;
+    }
+    setSidebarCollapsed((collapsed) => !collapsed);
+  };
+
   const goTo = (lessonId: string) => {
     window.clearTimeout(advanceTimerRef.current);
     setFinished(false);
@@ -110,13 +194,36 @@ export default function CourseView({ course, source, onBack }: CourseViewProps) 
   };
 
   return (
-    <div className="course-view">
+    <div
+      className={`course-view${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}
+      style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
+    >
       <aside className={`course-sidebar${sidebarOpen ? ' open' : ''}`}>
         <LessonTree course={course} activeId={activeId} progress={progress} onSelect={goTo} />
+        <div
+          className="sidebar-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize lesson list"
+          onPointerDown={handleResizeStart}
+          onPointerMove={handleResizeMove}
+          onPointerUp={handleResizeEnd}
+          onPointerCancel={handleResizeEnd}
+        />
       </aside>
       {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
       <main className="course-main">
         <div className="course-topbar">
+          <button
+            type="button"
+            className="btn btn-ghost icon-btn lessons-toggle"
+            onClick={toggleSidebar}
+            title={sidebarCollapsed ? 'Show lessons' : 'Hide lessons'}
+            aria-label={sidebarCollapsed ? 'Show lessons' : 'Hide lessons'}
+            aria-expanded={!sidebarCollapsed}
+          >
+            <IconSidebar />
+          </button>
           <button type="button" className="btn btn-ghost back-btn" onClick={onBack}>
             ← Courses
           </button>
@@ -127,17 +234,11 @@ export default function CourseView({ course, source, onBack }: CourseViewProps) 
                 {completedCount} / {flat.length} lessons
               </span>
               <div className="progress-track small">
-                <div className="progress-fill" style={{ width: `${pct}%` }} />
+                <div className="progress-fill" style={{ width: `${watchedPct}%` }} />
               </div>
+              <span>{watchedPct}% watched</span>
             </div>
           </div>
-          <button
-            type="button"
-            className="btn btn-ghost lessons-toggle"
-            onClick={() => setSidebarOpen((open) => !open)}
-          >
-            Lessons
-          </button>
         </div>
         <div className="course-player-area">
           {videoUrl && (
