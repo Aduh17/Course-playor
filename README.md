@@ -2,6 +2,12 @@
 
 A local-first web app that turns a folder of videos into a course library. Point it at your videos folder once: every top-level subfolder becomes a course, nested folders become sections, and video files become lessons. Watch progress is tracked per lesson and saved in your browser.
 
+## Screenshots
+
+![Course library showing course cards with total runtime and percent watched](docs/screenshots/library.png)
+
+![Course view with lesson durations, progress, and the video player](docs/screenshots/course.png)
+
 ## Features
 
 - **Folder → course mapping** — no manual playlist building; your existing folder structure is the course structure
